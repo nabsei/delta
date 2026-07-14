@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_dsp/juce_dsp.h>
 #include <atomic>
 #include <vector>
@@ -20,7 +21,7 @@ class DeltaProcessor : public juce::AudioProcessor
 {
 public:
     DeltaProcessor();
-    ~DeltaProcessor() override = default;
+    ~DeltaProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -58,6 +59,11 @@ public:
     int   getCurrentOffsetSamples() const { return currentOffsetSamples.load(); }
     bool  hasSidechainSignal() const { return sidechainActive.load(); }
 
+    // True while the background worker is computing a new alignment --
+    // the search runs off the audio thread, so this can lag a few
+    // milliseconds behind an Align click/request.
+    bool isAligning() const { return alignWorkerBusy.load(); }
+
     // Live spectrogram of the residual (post-alignment difference) signal.
     // The audio thread pushes one column per hop into a lock-free FIFO; the
     // UI thread drains it on a timer. This is the plugin's hero visual --
@@ -81,6 +87,19 @@ public:
     // demonstrating what the tool is actually for.
     void setTestSignalEnabled(bool shouldEnable) { testSignalEnabled.store(shouldEnable); }
     bool isTestSignalEnabled() const { return testSignalEnabled.load(); }
+
+    // Offline file-based comparison: load two files and Delta plays them
+    // back on a loop through the same pipeline as live audio (alignment,
+    // spectrogram, null depth all work identically). Takes priority over a
+    // live sidechain but not over the built-in test signal. Safe to call
+    // from the message thread; the audio thread only ever try-locks, so
+    // loading a file can never block or glitch audio.
+    void loadFileIntoA(const juce::File& file);
+    void loadFileIntoB(const juce::File& file);
+    void clearFiles();
+    bool isFileModeEnabled() const { return fileModeEnabled.load(); }
+    juce::String getFileNameA() const { const juce::SpinLock::ScopedLockType sl(fileLock); return fileNameA; }
+    juce::String getFileNameB() const { const juce::SpinLock::ScopedLockType sl(fileLock); return fileNameB; }
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -108,7 +127,38 @@ private:
     std::atomic<bool> testSignalEnabled { false };
     juce::int64 testSampleCounter = 0;
 
-    void runAlignment();
+    // The correlation search itself (up to ~(2*maxLagSamples+1) * captureLength
+    // double multiply-adds, roughly 1M ops) is too expensive to run inline on
+    // the audio thread without risking an audible glitch on whichever block
+    // happens to consume the Align request. Instead the audio thread only
+    // takes a cheap O(captureLength) snapshot and hands it to a background
+    // thread; the search itself never blocks audio processing.
+    class AlignWorker : public juce::Thread
+    {
+    public:
+        AlignWorker() : juce::Thread("Delta Align") {}
+        void run() override;
+        DeltaProcessor* owner = nullptr;
+    };
+    friend class AlignWorker;
+
+    AlignWorker alignWorker;
+    std::atomic<bool> alignWorkerBusy { false };
+    std::vector<float> alignSnapshotA, alignSnapshotB; // captureLength each
+
+    void triggerAlignmentSnapshot();
+    int computeBestLag(const std::vector<float>& linA, const std::vector<float>& linB) const;
+
+    juce::AudioFormatManager formatManager;
+    juce::SpinLock fileLock;
+    juce::AudioBuffer<float> fileBufferA, fileBufferB;
+    int filePlayheadA = 0, filePlayheadB = 0;
+    bool fileALoaded = false, fileBLoaded = false;
+    juce::String fileNameA, fileNameB;
+    std::atomic<bool> fileModeEnabled { false };
+
+    void loadFileInto(const juce::File& file, juce::AudioBuffer<float>& destBuffer,
+                       bool& loadedFlag, juce::String& nameOut, int& playheadOut);
 
     // Spectrogram analysis state (audio thread only).
     juce::dsp::FFT fft { fftOrder };

@@ -72,7 +72,41 @@ DeltaEditor::DeltaEditor(DeltaProcessor& p)
     alignButton.onClick = [this] { processorRef.requestAlign(); };
     addAndMakeVisible(alignButton);
 
-    setSize(560, 360);
+    loadAButton.onClick = [this]
+    {
+        fileChooser = std::make_unique<juce::FileChooser>(
+            "Load source A...", juce::File(), "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.ogg");
+        fileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                  [this](const juce::FileChooser& fc)
+                                  {
+                                      auto file = fc.getResult();
+                                      if (file.existsAsFile())
+                                          processorRef.loadFileIntoA(file);
+                                  });
+    };
+    addAndMakeVisible(loadAButton);
+
+    loadBButton.onClick = [this]
+    {
+        fileChooser = std::make_unique<juce::FileChooser>(
+            "Load source B...", juce::File(), "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.ogg");
+        fileChooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                  [this](const juce::FileChooser& fc)
+                                  {
+                                      auto file = fc.getResult();
+                                      if (file.existsAsFile())
+                                          processorRef.loadFileIntoB(file);
+                                  });
+    };
+    addAndMakeVisible(loadBButton);
+
+    clearFilesButton.onClick = [this] { processorRef.clearFiles(); };
+    addAndMakeVisible(clearFilesButton);
+
+    setSize(640, 420);
+    setResizable(true, true);
+    setResizeLimits(520, 340, 1600, 1000);
+
     introStartMs = juce::Time::getMillisecondCounterHiRes();
     startTimerHz(30);
 }
@@ -159,6 +193,12 @@ void DeltaEditor::timerCallback()
     currentSidechainPresent = processorRef.hasSidechainSignal();
     currentDb = processorRef.getNullDepthDb();
     currentOffsetSamples = processorRef.getCurrentOffsetSamples();
+    currentFileModeEnabled = processorRef.isFileModeEnabled();
+    if (currentFileModeEnabled)
+    {
+        currentFileNameA = processorRef.getFileNameA();
+        currentFileNameB = processorRef.getFileNameB();
+    }
 
     pushSpectrumColumns();
 
@@ -315,16 +355,22 @@ void DeltaEditor::paint(juce::Graphics& g)
     g.drawHorizontalLine(bottomBar.getY(), 0.0f, (float) getWidth());
 
     g.setFont(DeltaLookAndFeel::monoFont(11.0f));
+    g.setColour(currentFileModeEnabled ? DeltaLookAndFeel::amber : DeltaLookAndFeel::textDim);
+    juce::String fileStatus = currentFileModeEnabled
+                                   ? ("FILES  A: " + currentFileNameA + "   B: " + currentFileNameB)
+                                   : juce::String("LIVE SIDECHAIN MODE (load files to compare offline)");
+    g.drawText(fileStatus, fileStatusTextArea, juce::Justification::centredLeft);
+
     g.setColour(DeltaLookAndFeel::textDim);
     double ms = (double) currentOffsetSamples / sampleRate * 1000.0;
     juce::String offsetText = "OFFSET " + juce::String(currentOffsetSamples) + " smp ("
                                    + juce::String(ms, 2) + " ms)";
-    g.drawText(offsetText, bottomTextArea, juce::Justification::centredLeft);
+    g.drawText(offsetText, offsetTextArea, juce::Justification::centredLeft);
 
     // Free during the beta test period -- licensing/paid gating comes later,
     // so the footer signals status rather than just a casual name credit.
     g.setColour(DeltaLookAndFeel::amberDim);
-    g.drawText("UNLICENSED", bottomTextArea, juce::Justification::centredRight);
+    g.drawText("UNLICENSED", brandTextArea, juce::Justification::centredRight);
 
     // A brief CRT power-on sweep on load -- a small flourish, not a gimmick.
     double elapsed = juce::Time::getMillisecondCounterHiRes() - introStartMs;
@@ -346,7 +392,7 @@ void DeltaEditor::paint(juce::Graphics& g)
 void DeltaEditor::resized()
 {
     auto full = getLocalBounds();
-    bottomBar = full.removeFromBottom(40);
+    bottomBar = full.removeFromBottom(64);
 
     full.removeFromRight(6);
     legendLabelBounds = full.removeFromRight(26);
@@ -369,10 +415,19 @@ void DeltaEditor::resized()
         peakHoldT.assign((size_t) h, 0.0f);
     }
 
-    auto bar = bottomBar.reduced(8, 7);
-    testSignalButton.setBounds(bar.removeFromLeft(90));
-    bar.removeFromLeft(8);
-    alignButton.setBounds(bar.removeFromLeft(70));
-    bar.removeFromLeft(12);
-    bottomTextArea = bar;
+    auto buttonRow = bottomBar.removeFromTop(40).reduced(8, 6);
+    loadAButton.setBounds(buttonRow.removeFromLeft(70));
+    buttonRow.removeFromLeft(6);
+    loadBButton.setBounds(buttonRow.removeFromLeft(70));
+    buttonRow.removeFromLeft(6);
+    clearFilesButton.setBounds(buttonRow.removeFromLeft(60));
+    buttonRow.removeFromLeft(20);
+    testSignalButton.setBounds(buttonRow.removeFromLeft(90));
+    buttonRow.removeFromLeft(8);
+    alignButton.setBounds(buttonRow.removeFromLeft(70));
+
+    auto textRow = bottomBar.reduced(8, 2);
+    brandTextArea = textRow.removeFromRight(90);
+    offsetTextArea = textRow.removeFromRight(170);
+    fileStatusTextArea = textRow;
 }

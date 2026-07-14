@@ -10,6 +10,14 @@ DeltaProcessor::DeltaProcessor()
                           .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMS", createLayout())
 {
+    formatManager.registerBasicFormats();
+    alignWorker.owner = this;
+    alignWorker.startThread();
+}
+
+DeltaProcessor::~DeltaProcessor()
+{
+    alignWorker.stopThread(2000);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout DeltaProcessor::createLayout()
@@ -64,6 +72,10 @@ void DeltaProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     columnFifo.reset();
 
     testSampleCounter = 0;
+
+    alignSnapshotA.assign((size_t) captureLength, 0.0f);
+    alignSnapshotB.assign((size_t) captureLength, 0.0f);
+    alignWorkerBusy.store(false);
 }
 
 void DeltaProcessor::releaseResources() {}
@@ -112,30 +124,27 @@ int DeltaProcessor::readSpectrumColumns(std::vector<float>& destFlat, int maxCol
     int start1, size1, start2, size2;
     columnFifo.prepareToRead(toRead, start1, size1, start2, size2);
 
+    using diff_t = std::vector<float>::difference_type;
     destFlat.resize((size_t) toRead * (size_t) numBins);
     if (size1 > 0)
-        std::copy(columnStorage.begin() + (size_t) start1 * (size_t) numBins,
-                   columnStorage.begin() + (size_t) (start1 + size1) * (size_t) numBins,
+        std::copy(columnStorage.begin() + (diff_t) start1 * (diff_t) numBins,
+                   columnStorage.begin() + (diff_t) (start1 + size1) * (diff_t) numBins,
                    destFlat.begin());
     if (size2 > 0)
-        std::copy(columnStorage.begin() + (size_t) start2 * (size_t) numBins,
-                   columnStorage.begin() + (size_t) (start2 + size2) * (size_t) numBins,
-                   destFlat.begin() + (size_t) size1 * (size_t) numBins);
+        std::copy(columnStorage.begin() + (diff_t) start2 * (diff_t) numBins,
+                   columnStorage.begin() + (diff_t) (start2 + size2) * (diff_t) numBins,
+                   destFlat.begin() + (diff_t) size1 * (diff_t) numBins);
 
     columnFifo.finishedRead(size1 + size2);
     return toRead;
 }
 
-void DeltaProcessor::runAlignment()
+// Pure search: given two linearized (chronological-order) windows, find the
+// lag that maximizes normalized cross-correlation. No side effects, safe to
+// call from any thread -- this is the expensive O(maxLag * captureLength)
+// part that must never run on the audio thread.
+int DeltaProcessor::computeBestLag(const std::vector<float>& linA, const std::vector<float>& linB) const
 {
-    // Linearize the two circular capture buffers into chronological order.
-    std::vector<float> linA((size_t) captureLength), linB((size_t) captureLength);
-    for (int i = 0; i < captureLength; ++i)
-    {
-        linA[(size_t) i] = captureA[(size_t) ((captureWritePos + i) % captureLength)];
-        linB[(size_t) i] = captureB[(size_t) ((captureWritePos + i) % captureLength)];
-    }
-
     double bestScore = -1.0e30;
     int bestLag = 0;
 
@@ -170,7 +179,114 @@ void DeltaProcessor::runAlignment()
         }
     }
 
-    currentOffsetSamples.store(bestLag);
+    return bestLag;
+}
+
+// Audio thread: cheap O(captureLength) linearize-and-copy into the snapshot
+// buffers, then hand off to the background worker. Never runs the actual
+// search inline.
+void DeltaProcessor::triggerAlignmentSnapshot()
+{
+    for (int i = 0; i < captureLength; ++i)
+    {
+        alignSnapshotA[(size_t) i] = captureA[(size_t) ((captureWritePos + i) % captureLength)];
+        alignSnapshotB[(size_t) i] = captureB[(size_t) ((captureWritePos + i) % captureLength)];
+    }
+    alignWorkerBusy.store(true);
+    alignWorker.notify();
+}
+
+void DeltaProcessor::AlignWorker::run()
+{
+    while (! threadShouldExit())
+    {
+        wait(-1);
+        if (threadShouldExit())
+            break;
+        if (owner == nullptr)
+            continue;
+
+        int bestLag = owner->computeBestLag(owner->alignSnapshotA, owner->alignSnapshotB);
+        owner->currentOffsetSamples.store(bestLag);
+        owner->alignWorkerBusy.store(false);
+    }
+}
+
+void DeltaProcessor::loadFileInto(const juce::File& file, juce::AudioBuffer<float>& destBuffer,
+                                   bool& loadedFlag, juce::String& nameOut, int& playheadOut)
+{
+    std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
+    if (reader == nullptr)
+        return;
+
+    const int numSamples = (int) reader->lengthInSamples;
+    if (numSamples <= 0)
+        return;
+
+    juce::AudioBuffer<float> raw((int) reader->numChannels, numSamples);
+    reader->read(&raw, 0, numSamples, 0, true, true);
+
+    juce::AudioBuffer<float> stereo(2, numSamples);
+    if (raw.getNumChannels() >= 2)
+    {
+        stereo.copyFrom(0, 0, raw, 0, 0, numSamples);
+        stereo.copyFrom(1, 0, raw, 1, 0, numSamples);
+    }
+    else
+    {
+        stereo.copyFrom(0, 0, raw, 0, 0, numSamples);
+        stereo.copyFrom(1, 0, raw, 0, 0, numSamples);
+    }
+
+    // Resample to the current project rate if needed, so file-mode content
+    // aligns with the same time axis the rest of the pipeline assumes.
+    if (currentSampleRate > 0.0 && std::abs(reader->sampleRate - currentSampleRate) > 0.5)
+    {
+        double ratio = reader->sampleRate / currentSampleRate;
+        int outLen = juce::jmax(1, (int) std::ceil((double) numSamples / ratio));
+        juce::AudioBuffer<float> resampled(2, outLen);
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            juce::LagrangeInterpolator interp;
+            interp.reset();
+            interp.process(ratio, stereo.getReadPointer(ch), resampled.getWritePointer(ch), outLen);
+        }
+        stereo = std::move(resampled);
+    }
+
+    {
+        // Buffer, flag, name and playhead are all swapped in together under
+        // the same lock -- the audio thread's try-locked read in
+        // processBlock() must never see a new buffer paired with a stale
+        // (out-of-range) playhead from the previous file, or vice versa.
+        const juce::SpinLock::ScopedLockType sl(fileLock);
+        destBuffer = std::move(stereo);
+        loadedFlag = true;
+        nameOut = file.getFileName();
+        playheadOut = 0;
+    }
+}
+
+void DeltaProcessor::loadFileIntoA(const juce::File& file)
+{
+    loadFileInto(file, fileBufferA, fileALoaded, fileNameA, filePlayheadA);
+    fileModeEnabled.store(fileALoaded && fileBLoaded);
+}
+
+void DeltaProcessor::loadFileIntoB(const juce::File& file)
+{
+    loadFileInto(file, fileBufferB, fileBLoaded, fileNameB, filePlayheadB);
+    fileModeEnabled.store(fileALoaded && fileBLoaded);
+}
+
+void DeltaProcessor::clearFiles()
+{
+    fileModeEnabled.store(false);
+    const juce::SpinLock::ScopedLockType sl(fileLock);
+    fileALoaded = false;
+    fileBLoaded = false;
+    fileNameA = {};
+    fileNameB = {};
 }
 
 void DeltaProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -210,6 +326,31 @@ void DeltaProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
     else
     {
         localB.clear();
+    }
+
+    // Offline file comparison: takes priority over a live sidechain (loading
+    // files is a deliberate action), but the built-in test signal still
+    // wins if both happen to be active. The audio thread only ever
+    // try-locks fileLock, so a file load in progress on the message thread
+    // can never block or glitch audio -- it just skips file mode for that
+    // one block and picks it up again next block.
+    if (fileModeEnabled.load())
+    {
+        const juce::SpinLock::ScopedTryLockType stl(fileLock);
+        if (stl.isLocked() && fileALoaded && fileBLoaded
+            && fileBufferA.getNumSamples() > 0 && fileBufferB.getNumSamples() > 0)
+        {
+            sideAvailable = true;
+            for (int i = 0; i < numSamples; ++i)
+            {
+                localA.setSample(0, i, fileBufferA.getSample(0, filePlayheadA));
+                localA.setSample(1, i, fileBufferA.getSample(1, filePlayheadA));
+                localB.setSample(0, i, fileBufferB.getSample(0, filePlayheadB));
+                localB.setSample(1, i, fileBufferB.getSample(1, filePlayheadB));
+                filePlayheadA = (filePlayheadA + 1) % fileBufferA.getNumSamples();
+                filePlayheadB = (filePlayheadB + 1) % fileBufferB.getNumSamples();
+            }
+        }
     }
 
     if (testSignalEnabled.load())
@@ -253,14 +394,15 @@ void DeltaProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             captureFull = true;
     }
 
-    // Only consume the Align request once there's a sidechain AND the
-    // capture buffers hold a full window of real audio -- otherwise the
-    // flag just stays pending and gets picked up once both are true, rather
-    // than running a correlation search against mostly-zero-padded data.
-    if (alignRequested.load() && sideAvailable && captureFull)
+    // Only hand off the Align request once there's a sidechain, the capture
+    // buffers hold a full window of real audio, and the background worker
+    // isn't already mid-search (so we never overwrite its snapshot while
+    // it's reading it). The actual correlation search runs on AlignWorker,
+    // never inline here.
+    if (alignRequested.load() && sideAvailable && captureFull && ! alignWorkerBusy.load())
     {
         alignRequested.store(false);
-        runAlignment();
+        triggerAlignmentSnapshot();
     }
 
     const int baseLatency = maxLagSamples;

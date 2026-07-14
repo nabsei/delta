@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_formats/juce_audio_formats.h>
 #include "DeltaProcessor.h"
 #include "DeltaLookAndFeel.h"
 
@@ -21,13 +22,17 @@ private:
 
     juce::TextButton alignButton { "ALIGN" };
     juce::TextButton testSignalButton { "TEST SIG" };
+    juce::TextButton loadAButton { "LOAD A" };
+    juce::TextButton loadBButton { "LOAD B" };
+    juce::TextButton clearFilesButton { "CLEAR" };
+    std::unique_ptr<juce::FileChooser> fileChooser;
 
     juce::Rectangle<int> spectrogramBounds;
     juce::Rectangle<int> peakStripBounds;
     juce::Rectangle<int> legendBarBounds;
     juce::Rectangle<int> legendLabelBounds;
     juce::Rectangle<int> bottomBar;
-    juce::Rectangle<int> bottomTextArea;
+    juce::Rectangle<int> fileStatusTextArea, offsetTextArea, brandTextArea;
 
     juce::Image spectrogramImage;
     int spectrogramWriteX = 0;
@@ -42,6 +47,8 @@ private:
     float currentDb = -100.0f;
     bool currentSidechainPresent = false;
     int currentOffsetSamples = 0;
+    bool currentFileModeEnabled = false;
+    juce::String currentFileNameA, currentFileNameB;
 
     double introStartMs = 0.0;
 
