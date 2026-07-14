@@ -36,6 +36,13 @@ void DeltaProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     setRateAndBufferSizeDetails(sampleRate, samplesPerBlock);
     currentSampleRate = sampleRate;
 
+    // The A path is always delayed by a fixed maxLagSamples before being
+    // combined with the (variably-delayed) B path -- report that as the
+    // plugin's processing latency so hosts can compensate for it (PDC).
+    // Without this, a "sample-accurate" alignment tool would silently
+    // introduce an unreported timing offset of its own.
+    setLatencySamples(maxLagSamples);
+
     delayLineSize = juce::jmax(8192, 2 * maxLagSamples + samplesPerBlock * 4);
     delayLine.setSize(4, delayLineSize);
     delayLine.clear();
