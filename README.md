@@ -14,7 +14,7 @@ Built with [JUCE](https://juce.com/), ships as VST3 / AU / Standalone on macOS
 and Windows.
 
 <p align="center">
-  <img src="assets/screenshot.png" alt="Delta plugin UI">
+  <img src="assets/screenshot.png?v=2" alt="Delta plugin UI">
 </p>
 
 <p align="center">
