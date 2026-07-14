@@ -19,6 +19,7 @@ and Windows.
 
 <p align="center">
   <strong><a href="https://github.com/nabsei/delta/releases/latest">⬇ Download the latest beta</a></strong> — macOS and Windows, free during the beta period.
+  · <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ## Why this exists
@@ -96,8 +97,11 @@ CMakeLists.txt
 
 - [ ] Code signing / notarization for both macOS and Windows (current
       beta requires a one-time manual step on first install)
-- [ ] Resizable / high-DPI UI
-- [ ] Automated test suite
+- [x] Resizable / high-DPI UI
+- [x] Automated test suite (headless DSP + UI snapshot tools, private repo)
+- [ ] Real-world testing in a DAW (Ableton, Logic, FL Studio, etc.) and on
+      an actual Windows machine -- so far only Standalone-on-macOS and CI
+      compile checks
 - [ ] Licensing gate for the post-beta paid release
 
 ## License

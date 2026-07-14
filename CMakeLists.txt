@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(Delta VERSION 0.2.0)
+project(Delta VERSION 0.2.1)
 
 add_subdirectory(libs/JUCE)
 

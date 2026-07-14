@@ -56,8 +56,18 @@ void DeltaProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     delayLine.clear();
     delayWritePos = 0;
 
-    captureA.assign((size_t) captureLength, 0.0f);
-    captureB.assign((size_t) captureLength, 0.0f);
+    // captureA/B, fftInputRing, columnStorage and alignSnapshotA/B are all
+    // sized from compile-time constants, so they never need to change size
+    // across repeated prepareToPlay() calls. Allocating them only once (and
+    // just resetting the read/write position counters on every call) means
+    // their underlying buffers never move -- which matters because
+    // columnStorage is read by the UI thread and alignSnapshotA/B are read
+    // by the background AlignWorker, neither of which is covered by JUCE's
+    // processBlock/prepareToPlay mutual-exclusion guarantee. Reassigning
+    // (and potentially reallocating) them here while either thread might
+    // still be reading would be a use-after-free.
+    if (captureA.empty()) captureA.assign((size_t) captureLength, 0.0f);
+    if (captureB.empty()) captureB.assign((size_t) captureLength, 0.0f);
     captureWritePos = 0;
     captureFull = false;
 
@@ -65,17 +75,21 @@ void DeltaProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     nullDepthDb.store(-100.0f);
     sidechainActive.store(false);
 
-    fftInputRing.assign((size_t) fftSize, 0.0f);
+    if (fftInputRing.empty()) fftInputRing.assign((size_t) fftSize, 0.0f);
     fftWritePos = 0;
     samplesSinceHop = 0;
-    columnStorage.assign((size_t) columnFifoCapacity * (size_t) numBins, 0.0f);
+    if (columnStorage.empty())
+        columnStorage.assign((size_t) columnFifoCapacity * (size_t) numBins, 0.0f);
     columnFifo.reset();
 
     testSampleCounter = 0;
 
-    alignSnapshotA.assign((size_t) captureLength, 0.0f);
-    alignSnapshotB.assign((size_t) captureLength, 0.0f);
-    alignWorkerBusy.store(false);
+    if (alignSnapshotA.empty()) alignSnapshotA.assign((size_t) captureLength, 0.0f);
+    if (alignSnapshotB.empty()) alignSnapshotB.assign((size_t) captureLength, 0.0f);
+    // Do NOT reset alignWorkerBusy here: if the worker is genuinely still
+    // computing an alignment from before this prepareToPlay() call, forcing
+    // it back to false would let the audio thread hand off a new snapshot
+    // while the worker is still reading the old one.
 }
 
 void DeltaProcessor::releaseResources() {}
