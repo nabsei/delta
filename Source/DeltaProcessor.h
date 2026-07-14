@@ -47,8 +47,9 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
-    // Call from the UI thread to request a realignment; picked up on the
-    // next processBlock call.
+    // Call from the UI thread to request a realignment. Stays pending until
+    // a sidechain is actually available and the capture window has filled
+    // with real audio (~46ms), so it never runs against mostly-zero data.
     void requestAlign() { alignRequested.store(true); }
 
     // For the UI: current measured null depth in dB (very negative = deep
