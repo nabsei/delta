@@ -100,6 +100,8 @@ public:
     bool isFileModeEnabled() const { return fileModeEnabled.load(); }
     juce::String getFileNameA() const { const juce::SpinLock::ScopedLockType sl(fileLock); return fileNameA; }
     juce::String getFileNameB() const { const juce::SpinLock::ScopedLockType sl(fileLock); return fileNameB; }
+    juce::String getFilePathA() const { const juce::SpinLock::ScopedLockType sl(fileLock); return filePathA; }
+    juce::String getFilePathB() const { const juce::SpinLock::ScopedLockType sl(fileLock); return filePathB; }
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -154,11 +156,12 @@ private:
     juce::AudioBuffer<float> fileBufferA, fileBufferB;
     int filePlayheadA = 0, filePlayheadB = 0;
     bool fileALoaded = false, fileBLoaded = false;
-    juce::String fileNameA, fileNameB;
+    juce::String fileNameA, fileNameB;   // display name only
+    juce::String filePathA, filePathB;   // full path, used to restore file mode across save/reload
     std::atomic<bool> fileModeEnabled { false };
 
     void loadFileInto(const juce::File& file, juce::AudioBuffer<float>& destBuffer,
-                       bool& loadedFlag, juce::String& nameOut, int& playheadOut);
+                       bool& loadedFlag, juce::String& nameOut, juce::String& pathOut, int& playheadOut);
 
     // Spectrogram analysis state (audio thread only).
     juce::dsp::FFT fft { fftOrder };

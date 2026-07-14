@@ -227,7 +227,7 @@ void DeltaProcessor::AlignWorker::run()
 }
 
 void DeltaProcessor::loadFileInto(const juce::File& file, juce::AudioBuffer<float>& destBuffer,
-                                   bool& loadedFlag, juce::String& nameOut, int& playheadOut)
+                                   bool& loadedFlag, juce::String& nameOut, juce::String& pathOut, int& playheadOut)
 {
     std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
     if (reader == nullptr)
@@ -292,19 +292,20 @@ void DeltaProcessor::loadFileInto(const juce::File& file, juce::AudioBuffer<floa
         destBuffer = std::move(stereo);
         loadedFlag = true;
         nameOut = file.getFileName();
+        pathOut = file.getFullPathName();
         playheadOut = 0;
     }
 }
 
 void DeltaProcessor::loadFileIntoA(const juce::File& file)
 {
-    loadFileInto(file, fileBufferA, fileALoaded, fileNameA, filePlayheadA);
+    loadFileInto(file, fileBufferA, fileALoaded, fileNameA, filePathA, filePlayheadA);
     fileModeEnabled.store(fileALoaded && fileBLoaded);
 }
 
 void DeltaProcessor::loadFileIntoB(const juce::File& file)
 {
-    loadFileInto(file, fileBufferB, fileBLoaded, fileNameB, filePlayheadB);
+    loadFileInto(file, fileBufferB, fileBLoaded, fileNameB, filePathB, filePlayheadB);
     fileModeEnabled.store(fileALoaded && fileBLoaded);
 }
 
@@ -316,6 +317,8 @@ void DeltaProcessor::clearFiles()
     fileBLoaded = false;
     fileNameA = {};
     fileNameB = {};
+    filePathA = {};
+    filePathB = {};
 }
 
 void DeltaProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -501,6 +504,14 @@ void DeltaProcessor::getStateInformation(juce::MemoryBlock& destData)
     auto state = apvts.copyState();
     state.setProperty("offset", currentOffsetSamples.load(), nullptr);
     state.setProperty("testSignal", testSignalEnabled.load(), nullptr);
+
+    if (fileModeEnabled.load())
+    {
+        const juce::SpinLock::ScopedLockType sl(fileLock);
+        state.setProperty("filePathA", filePathA, nullptr);
+        state.setProperty("filePathB", filePathB, nullptr);
+    }
+
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -514,5 +525,17 @@ void DeltaProcessor::setStateInformation(const void* data, int sizeInBytes)
         currentOffsetSamples.store((int) state.getProperty("offset", 0));
         testSignalEnabled.store((bool) state.getProperty("testSignal", false));
         apvts.replaceState(state);
+
+        // Restore file-comparison mode if both files this session was
+        // saved with still exist -- otherwise silently fall back to live
+        // mode rather than fail the whole state load.
+        juce::String savedPathA = state.getProperty("filePathA", "");
+        juce::String savedPathB = state.getProperty("filePathB", "");
+        if (savedPathA.isNotEmpty() && savedPathB.isNotEmpty())
+        {
+            juce::File fa(savedPathA), fb(savedPathB);
+            if (fa.existsAsFile()) loadFileIntoA(fa);
+            if (fb.existsAsFile()) loadFileIntoB(fb);
+        }
     }
 }

@@ -115,3 +115,15 @@ calibration used in the actual product is not included in this source.
 period, not free to redistribute or resell. See the `TERMS.txt` included in
 each release download for the full terms. A paid license will replace this
 beta terms after the beta period ends.
+
+## Also by the same author
+
+Delta is a standalone tool, not part of the Montagem family below — but
+same author, different audience:
+
+- [Montagem 808](https://github.com/nabsei/montagem-808)
+- [Montagem Finisher](https://github.com/nabsei/montagem-finisher)
+- [Montagem Widener](https://github.com/nabsei/montagem-widener)
+- [Montagem Punch](https://github.com/nabsei/montagem-punch)
+
+A family of one-knob plugins for funk automotivo / phonk production.

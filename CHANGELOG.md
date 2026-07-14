@@ -9,6 +9,15 @@ beta:
 - **MINOR** (0.x.0): new features or notable user-facing changes
 - **MAJOR** (1.0.0+): first stable release, then breaking changes only
 
+## [0.2.2] - 2026-07-15
+
+### Fixed
+- File-comparison mode (loaded file paths) was not saved/restored across
+  session save-reload -- only the TEST SIGNAL toggle was, so reopening a
+  project with an active file comparison silently reverted to live
+  sidechain mode. Both file paths now round-trip through
+  get/setStateInformation, same as TEST SIGNAL.
+
 ## [0.2.1] - 2026-07-15
 
 ### Fixed
