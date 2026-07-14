@@ -17,6 +17,12 @@ beta:
   FIFO, neither of which is covered by JUCE's processBlock/prepareToPlay
   mutual-exclusion guarantee. These buffers are now allocated once and
   never resized after that.
+- File-mode loading could hit undefined behaviour (division by zero, then
+  casting +/-inf to `int`) if a malformed file reported a zero or negative
+  sample rate, or read out of bounds if it reported zero channels. Both are
+  now validated before use.
+- File-mode loading had no cap on file length, so an accidentally-selected
+  multi-hour file could exhaust memory. Capped at 30 minutes.
 
 ## [0.2.0] - 2026-07-14
 

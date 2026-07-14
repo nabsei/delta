@@ -233,7 +233,22 @@ void DeltaProcessor::loadFileInto(const juce::File& file, juce::AudioBuffer<floa
     if (reader == nullptr)
         return;
 
-    const int numSamples = (int) reader->lengthInSamples;
+    // Validate everything the arithmetic below depends on before touching
+    // it -- a corrupted/malformed file could otherwise report a zero or
+    // negative sample rate (division by zero -> +/-inf -> casting that to
+    // int is undefined behaviour) or zero channels (out-of-bounds channel
+    // access on copyFrom).
+    if (reader->sampleRate <= 0.0 || reader->numChannels < 1)
+        return;
+
+    // Cap how much audio we'll pull into memory for file mode -- a user
+    // accidentally picking a multi-hour file shouldn't be able to exhaust
+    // memory. 30 minutes at any reasonable sample rate is far more than
+    // this tool is meant for (it loops the file, it doesn't need the whole
+    // thing to make its point).
+    constexpr juce::int64 maxSamples = (juce::int64) (30 * 60 * 192000);
+    juce::int64 lengthSamples = juce::jmin(reader->lengthInSamples, maxSamples);
+    const int numSamples = (int) lengthSamples;
     if (numSamples <= 0)
         return;
 
