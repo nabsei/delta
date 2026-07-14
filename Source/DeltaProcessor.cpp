@@ -253,8 +253,15 @@ void DeltaProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
             captureFull = true;
     }
 
-    if (alignRequested.exchange(false) && sideAvailable)
+    // Only consume the Align request once there's a sidechain AND the
+    // capture buffers hold a full window of real audio -- otherwise the
+    // flag just stays pending and gets picked up once both are true, rather
+    // than running a correlation search against mostly-zero-padded data.
+    if (alignRequested.load() && sideAvailable && captureFull)
+    {
+        alignRequested.store(false);
         runAlignment();
+    }
 
     const int baseLatency = maxLagSamples;
     int bDelay = juce::jlimit(0, delayLineSize - 1, baseLatency + currentOffsetSamples.load());
@@ -285,7 +292,11 @@ void DeltaProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         sumSqResidual += (double) outL * outL + (double) outR * outR;
         sumSqA += (double) aL * aL + (double) aR * aR;
 
-        pushResidualSample(0.5f * (outL + outR));
+        // Only feed the spectrogram when there's an actual comparison
+        // happening -- otherwise it would light up with the main input's
+        // own content while the HUD still reads "NO SIDECHAIN / -inf dB",
+        // which looks like a contradiction.
+        pushResidualSample(sideAvailable ? 0.5f * (outL + outR) : 0.0f);
 
         delayWritePos = (delayWritePos + 1) % delayLineSize;
     }
@@ -318,6 +329,7 @@ void DeltaProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty("offset", currentOffsetSamples.load(), nullptr);
+    state.setProperty("testSignal", testSignalEnabled.load(), nullptr);
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
 }
@@ -329,6 +341,7 @@ void DeltaProcessor::setStateInformation(const void* data, int sizeInBytes)
     {
         auto state = juce::ValueTree::fromXml(*xml);
         currentOffsetSamples.store((int) state.getProperty("offset", 0));
+        testSignalEnabled.store((bool) state.getProperty("testSignal", false));
         apvts.replaceState(state);
     }
 }
