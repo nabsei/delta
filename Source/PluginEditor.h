@@ -31,12 +31,15 @@ private:
     juce::Rectangle<int> peakStripBounds;
     juce::Rectangle<int> legendBarBounds;
     juce::Rectangle<int> legendLabelBounds;
+    juce::Rectangle<int> displayBounds; // spectrogram + peak strip + legend, as one bezel
     juce::Rectangle<int> bottomBar;
     juce::Rectangle<int> fileStatusTextArea, offsetTextArea, brandTextArea;
 
     juce::Image spectrogramImage;
     int spectrogramWriteX = 0;
     std::vector<float> spectrumColumnScratch;
+
+    juce::Image crtNoise; // fixed grain texture, tiled over the display in paint()
 
     // Live per-row intensity (latest column) and its slow-decaying maximum,
     // drawn as a rotated bar-graph + peak-hold contour beside the spectrogram.

@@ -14,12 +14,16 @@ Built with [JUCE](https://juce.com/), ships as VST3 / AU / Standalone on macOS
 and Windows.
 
 <p align="center">
-  <img src="assets/screenshot.png?v=2" alt="Delta plugin UI">
+  <img src="assets/screenshot.png?v=3" alt="Delta plugin UI">
 </p>
 
 <p align="center">
   <strong><a href="https://github.com/nabsei/delta/releases/latest">⬇ Download the latest beta</a></strong> — macOS and Windows, free during the beta period.
   · <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+<p align="center">
+  Also listed on <a href="https://www.kvraudio.com/product/delta-by-montagem">KVR Audio</a>.
 </p>
 
 ## Why this exists

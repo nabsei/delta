@@ -9,6 +9,26 @@ beta:
 - **MINOR** (0.x.0): new features or notable user-facing changes
 - **MAJOR** (1.0.0+): first stable release, then breaking changes only
 
+## [0.3.0] - 2026-07-16
+
+### Changed
+- UI pass on the instrument display: a bezel frame with corner ticks now
+  encloses the spectrogram/peak-strip/legend as a single panel, a faint
+  sub-grid fills the frequency axis between the labeled lines so the
+  display reads as graph paper rather than mostly-empty black, the
+  heatmap gradient gained a third warmer stage (amber -> red-orange ->
+  white) instead of a flat amber-to-white blend, and the HUD title/footer
+  text got slightly wider letter-spacing for a more technical readout feel.
+- The null-depth dB reading -- the one number this plugin exists to
+  produce -- moved out of the shared HUD text row into its own inset
+  digital-readout box, so it reads as the dominant element instead of
+  sharing type weight with the branding.
+- The peak-hold contour now has a soft glow pass beneath the crisp line,
+  matching the spectrogram's existing phosphor glow.
+- Added a faint, fixed (non-animated) grain texture across the display
+  panel for a bit of screen texture instead of perfectly flat vector fills.
+  No DSP or parameter changes.
+
 ## [0.2.2] - 2026-07-15
 
 ### Fixed

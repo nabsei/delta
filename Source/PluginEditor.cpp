@@ -49,11 +49,18 @@ namespace
         return juce::jlimit(0.0f, 1.0f, (db + 90.0f) / 80.0f); // -90..-10 -> 0..1
     }
 
+    // Three-stop thermal ramp instead of a flat amber->white blend: adds a
+    // warmer, slightly red-shifted stage between amber and white so the
+    // hottest peaks read as "white-hot with a red halo" rather than just
+    // fading to a pale colour -- closer to how a real thermal palette looks.
     juce::Colour colourForIntensity(float t)
     {
-        if (t < 0.7f)
-            return DeltaLookAndFeel::bg.interpolatedWith(DeltaLookAndFeel::amber, t / 0.7f);
-        return DeltaLookAndFeel::amber.interpolatedWith(juce::Colours::white, (t - 0.7f) / 0.3f);
+        static const juce::Colour hot { 0xffff6a20 };
+        if (t < 0.55f)
+            return DeltaLookAndFeel::bg.interpolatedWith(DeltaLookAndFeel::amber, t / 0.55f);
+        if (t < 0.85f)
+            return DeltaLookAndFeel::amber.interpolatedWith(hot, (t - 0.55f) / 0.3f);
+        return hot.interpolatedWith(juce::Colours::white, (t - 0.85f) / 0.15f);
     }
 
     constexpr double introDurationMs = 550.0;
@@ -102,6 +109,23 @@ DeltaEditor::DeltaEditor(DeltaProcessor& p)
 
     clearFilesButton.onClick = [this] { processorRef.clearFiles(); };
     addAndMakeVisible(clearFilesButton);
+
+    // Fixed (not regenerated per frame) grain texture, tiled over the
+    // display in paint() -- a faint dot pattern rather than animated static,
+    // so it reads as a screen's texture instead of a distracting flicker.
+    {
+        crtNoise = juce::Image(juce::Image::ARGB, 80, 80, true);
+        juce::Random rng(1234);
+        juce::Image::BitmapData bitmap(crtNoise, juce::Image::BitmapData::writeOnly);
+        for (int y = 0; y < 80; ++y)
+            for (int x = 0; x < 80; ++x)
+            {
+                // Sparse: most pixels stay fully transparent so this reads as
+                // scattered grain, not a uniform haze over the whole panel.
+                juce::uint8 a = rng.nextFloat() < 0.12f ? (juce::uint8) rng.nextInt(14) : 0;
+                bitmap.setPixelColour(x, y, juce::Colours::white.withAlpha(a));
+            }
+    }
 
     setSize(640, 420);
     setResizable(true, true);
@@ -241,9 +265,23 @@ void DeltaEditor::paint(juce::Graphics& g)
                         0, 0, spectrogramWriteX, spectrogramImage.getHeight());
     }
 
+    // Fine sub-grid: faint intermediate frequency lines beneath the labeled
+    // ones, so the data area reads as graph paper / a real analyzer's
+    // reticle rather than a handful of isolated lines on black.
+    const int imgH = spectrogramBounds.getHeight();
+    {
+        const double subFreqs[] = { 200.0, 300.0, 500.0, 700.0, 2000.0, 3000.0, 7000.0, 15000.0 };
+        g.setColour(DeltaLookAndFeel::grid.withAlpha(0.45f));
+        for (double f : subFreqs)
+        {
+            if (f >= sampleRate * 0.5) continue;
+            int y = spectrogramBounds.getY() + (int) rowFromFreq(f, imgH, sampleRate);
+            g.drawHorizontalLine(y, (float) spectrogramBounds.getX(), (float) spectrogramBounds.getRight());
+        }
+    }
+
     // Frequency axis: hairline grid + labels overlaid directly on the data,
     // like a real analyzer -- not boxed off in its own panel.
-    const int imgH = spectrogramBounds.getHeight();
     const double freqs[] = { 100.0, 1000.0, 5000.0, 10000.0, 20000.0 };
     g.setFont(DeltaLookAndFeel::monoFont(10.0f));
     for (double f : freqs)
@@ -292,6 +330,11 @@ void DeltaEditor::paint(juce::Graphics& g)
                 if (y == 0) peakPath.startNewSubPath(x, yy);
                 else peakPath.lineTo(x, yy);
             }
+            // Halo pass beneath the crisp line, matching the spectrogram's
+            // phosphor glow so the peak-hold contour doesn't look flat next
+            // to it.
+            g.setColour(DeltaLookAndFeel::amber.withAlpha(0.22f));
+            g.strokePath(peakPath, juce::PathStrokeType(3.5f));
             g.setColour(DeltaLookAndFeel::amber.withAlpha(0.75f));
             g.strokePath(peakPath, juce::PathStrokeType(1.0f));
         }
@@ -324,6 +367,28 @@ void DeltaEditor::paint(juce::Graphics& g)
         }
     }
 
+    // Bezel: a single frame around the whole instrument display (spectrogram
+    // + peak strip + legend), with small corner ticks instead of a plain
+    // rectangle -- reads as a lit panel set into a housing rather than data
+    // just floating on the background.
+    {
+        auto db = displayBounds.toFloat();
+        g.setColour(DeltaLookAndFeel::amberDim.withAlpha(0.7f));
+        g.drawRect(db, 1.0f);
+
+        constexpr float tick = 7.0f;
+        g.setColour(DeltaLookAndFeel::amber.withAlpha(0.8f));
+        auto corner = [&] (float x, float y, float dx, float dy)
+        {
+            g.drawLine(x, y, x + dx * tick, y, 1.4f);
+            g.drawLine(x, y, x, y + dy * tick, 1.4f);
+        };
+        corner(db.getX(), db.getY(), 1.0f, 1.0f);
+        corner(db.getRight(), db.getY(), -1.0f, 1.0f);
+        corner(db.getX(), db.getBottom(), 1.0f, -1.0f);
+        corner(db.getRight(), db.getBottom(), -1.0f, -1.0f);
+    }
+
     // Top HUD, overlaid directly on the spectrogram -- no card, no title bar.
     auto topHud = spectrogramBounds.withHeight(18).reduced(6, 2);
 
@@ -341,14 +406,34 @@ void DeltaEditor::paint(juce::Graphics& g)
     topHud.removeFromLeft(4);
 
     g.setColour(DeltaLookAndFeel::textDim);
-    g.setFont(DeltaLookAndFeel::monoFont(12.0f, true));
+    g.setFont(DeltaLookAndFeel::monoFont(12.0f, true).withExtraKerningFactor(0.06f));
     g.drawText("DELTA / NULL TEST", topHud, juce::Justification::centredLeft);
 
+    // Null-depth readout: the single number this whole instrument exists to
+    // produce, so it gets its own inset digital-readout box rather than
+    // sharing a thin text row at the same weight as the branding.
     auto readoutColour = currentSidechainPresent ? DeltaLookAndFeel::amber : DeltaLookAndFeel::textDim;
-    g.setColour(readoutColour);
-    juce::String hudRight = (currentSidechainPresent ? formatDb(currentDb) : juce::String("-inf dB"))
-                                + "  " + statusFor(currentDb, currentSidechainPresent);
-    g.drawText(hudRight, topHud, juce::Justification::centredRight);
+    {
+        const int rw = 150, rh = 36;
+        juce::Rectangle<int> readoutBox(spectrogramBounds.getRight() - 6 - rw,
+                                         spectrogramBounds.getY() + 4, rw, rh);
+
+        g.setColour(DeltaLookAndFeel::bg.withAlpha(0.6f));
+        g.fillRect(readoutBox);
+        g.setColour(readoutColour.withAlpha(0.6f));
+        g.drawRect(readoutBox, 1.0f);
+
+        auto inner = readoutBox.reduced(7, 3);
+        auto valueArea = inner.removeFromTop(23);
+        g.setColour(readoutColour);
+        g.setFont(DeltaLookAndFeel::monoFont(19.0f, true));
+        g.drawText(currentSidechainPresent ? formatDb(currentDb) : juce::String("-inf dB"),
+                   valueArea, juce::Justification::centredRight);
+
+        g.setColour(DeltaLookAndFeel::textDim);
+        g.setFont(DeltaLookAndFeel::monoFont(9.5f).withExtraKerningFactor(0.04f));
+        g.drawText(statusFor(currentDb, currentSidechainPresent), inner, juce::Justification::centredRight);
+    }
 
     // Bottom bar.
     g.setColour(DeltaLookAndFeel::amberDim);
@@ -370,7 +455,19 @@ void DeltaEditor::paint(juce::Graphics& g)
     // Free during the beta test period -- licensing/paid gating comes later,
     // so the footer signals status rather than just a casual name credit.
     g.setColour(DeltaLookAndFeel::amberDim);
+    g.setFont(DeltaLookAndFeel::monoFont(11.0f).withExtraKerningFactor(0.06f));
     g.drawText("UNLICENSED", brandTextArea, juce::Justification::centredRight);
+
+    // Faint fixed grain, tiled across the whole instrument display -- gives
+    // the panel a bit of screen texture instead of perfectly flat vector fills.
+    if (crtNoise.isValid())
+    {
+        juce::Graphics::ScopedSaveState save(g);
+        g.reduceClipRegion(displayBounds);
+        for (int y = displayBounds.getY(); y < displayBounds.getBottom(); y += crtNoise.getHeight())
+            for (int x = displayBounds.getX(); x < displayBounds.getRight(); x += crtNoise.getWidth())
+                g.drawImageAt(crtNoise, x, y);
+    }
 
     // A brief CRT power-on sweep on load -- a small flourish, not a gimmick.
     double elapsed = juce::Time::getMillisecondCounterHiRes() - introStartMs;
@@ -393,6 +490,8 @@ void DeltaEditor::resized()
 {
     auto full = getLocalBounds();
     bottomBar = full.removeFromBottom(64);
+    displayBounds = full.reduced(2);
+    full.reduce(6, 6);
 
     full.removeFromRight(6);
     legendLabelBounds = full.removeFromRight(26);
