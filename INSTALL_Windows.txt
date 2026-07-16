@@ -1,0 +1,47 @@
+DELTA — BETA (Windows)
+========================
+
+This is an early beta build, not yet code-signed. Windows SmartScreen may
+show a warning the first time you run it — this is normal for an early
+indie plugin build, here's how to get past it.
+
+INSTALL
+-------
+
+1. Copy the "Delta.vst3" folder to:
+   C:\Program Files\Common Files\VST3\
+
+2. Rescan plugins in your DAW (or restart it) — Delta should now show
+   up under your effects.
+
+   (You can also run "Delta.exe" directly — no DAW needed, use its
+   built-in TEST SIGNAL button to try it without routing real audio.)
+
+USING IT
+---------
+
+Delta needs TWO audio sources to compare: the main input (source A) and
+a sidechain input (source B) — most DAWs let you route a sidechain from
+another track onto an insert. Hit ALIGN to auto-correct any timing
+offset between the two, then watch the spectrogram: silence/black means
+the two sources are effectively identical, any colour is a real
+difference.
+
+No sidechain routed yet? Click the TEST SIGNAL button in the plugin UI —
+it feeds a built-in synthetic A/B pair so you can see it working
+immediately, no setup required.
+
+IF WINDOWS SMARTSCREEN BLOCKS IT
+---------------------------------
+
+When you first run the .exe (or your DAW loads the plugin), you may see
+"Windows protected your PC". Click "More info", then "Run anyway".
+This appears because the build isn't yet signed with a paid code-signing
+certificate — it does not mean the file is unsafe, just that Windows
+doesn't yet recognize the publisher.
+
+QUESTIONS / BUGS
+-----------------
+
+This is a beta. If something sounds wrong or the alignment/UI misbehaves,
+please report it — beta feedback directly shapes what ships in v1.

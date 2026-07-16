@@ -1,0 +1,30 @@
+DELTA — TERMS OF USE (Beta)
+=====================================
+
+Copyright (c) 2026 nabsei. All rights reserved.
+
+This software is provided free of charge for personal and commercial
+audio production/verification use during the public beta period. A paid
+license will be required after the beta period ends; existing beta
+installs will be given migration terms at that time.
+
+You MAY:
+- Install and use this plugin on your own systems
+- Use it in your professional/production workflow, including commercial work
+
+You MAY NOT, without prior written permission:
+- Redistribute, re-upload, or mirror this software on any other website,
+  store, or platform
+- Sell, rent, or sublicense this software or any modified version of it
+- Reverse-engineer, decompile, or extract the alignment algorithm or
+  visual rendering pipeline for use in another product
+
+This software is provided "as is", without warranty of any kind, during
+this beta period. Functionality and these terms may change for the
+final paid v1.0 release.
+
+Official download location:
+- https://github.com/nabsei/delta
+
+If you obtained this software from any other source, please verify
+authenticity via the link above.
