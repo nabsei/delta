@@ -48,6 +48,7 @@ private:
 
     // HUD text state, refreshed on the timer and drawn directly in paint().
     float currentDb = -100.0f;
+    float displayDb = -100.0f; // ballistics-smoothed copy of currentDb, for the readout only
     bool currentSidechainPresent = false;
     int currentOffsetSamples = 0;
     bool currentFileModeEnabled = false;

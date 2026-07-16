@@ -9,6 +9,18 @@ beta:
 - **MINOR** (0.x.0): new features or notable user-facing changes
 - **MAJOR** (1.0.0+): first stable release, then breaking changes only
 
+## [0.3.1] - 2026-07-16
+
+### Fixed
+- The ALIGN button gave no feedback while a correlation search was running
+  in the background -- clicking it just did nothing visible until the
+  offset changed. It now reads "ALIGNING" and disables itself for the
+  duration, so repeated clicks can't queue up redundant requests.
+
+### Changed
+- The null-depth dB readout now has light ballistics smoothing instead of
+  jumping instantly between frames, closer to how a real meter settles.
+
 ## [0.3.0] - 2026-07-16
 
 ### Changed

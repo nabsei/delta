@@ -216,6 +216,14 @@ void DeltaEditor::timerCallback()
 {
     currentSidechainPresent = processorRef.hasSidechainSignal();
     currentDb = processorRef.getNullDepthDb();
+    // Ballistics on the readout only (not the underlying value) so the
+    // number settles like a real meter instead of jumping between frames.
+    displayDb += (currentDb - displayDb) * 0.25f;
+
+    bool aligning = processorRef.isAligning();
+    alignButton.setButtonText(aligning ? "ALIGNING" : "ALIGN");
+    alignButton.setEnabled(! aligning);
+
     currentOffsetSamples = processorRef.getCurrentOffsetSamples();
     currentFileModeEnabled = processorRef.isFileModeEnabled();
     if (currentFileModeEnabled)
@@ -427,12 +435,12 @@ void DeltaEditor::paint(juce::Graphics& g)
         auto valueArea = inner.removeFromTop(23);
         g.setColour(readoutColour);
         g.setFont(DeltaLookAndFeel::monoFont(19.0f, true));
-        g.drawText(currentSidechainPresent ? formatDb(currentDb) : juce::String("-inf dB"),
+        g.drawText(currentSidechainPresent ? formatDb(displayDb) : juce::String("-inf dB"),
                    valueArea, juce::Justification::centredRight);
 
         g.setColour(DeltaLookAndFeel::textDim);
         g.setFont(DeltaLookAndFeel::monoFont(9.5f).withExtraKerningFactor(0.04f));
-        g.drawText(statusFor(currentDb, currentSidechainPresent), inner, juce::Justification::centredRight);
+        g.drawText(statusFor(displayDb, currentSidechainPresent), inner, juce::Justification::centredRight);
     }
 
     // Bottom bar.
