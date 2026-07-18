@@ -1,5 +1,5 @@
-DELTA — BETA (macOS only)
-===========================
+DELTA ZERO — BETA (macOS only)
+===============================
 
 This is an early beta build. It is not yet notarized by Apple, so macOS
 will show a security warning the first time you use it. This is normal
@@ -10,34 +10,34 @@ Universal binary: works on both Apple Silicon (M1/M2/M3...) and Intel Macs.
 INSTALL
 -------
 
-1. Copy "Delta.vst3" to:
+1. Copy "Delta Zero.vst3" to:
    ~/Library/Audio/Plug-Ins/VST3/
 
-2. Copy "Delta.component" to:
+2. Copy "Delta Zero.component" to:
    ~/Library/Audio/Plug-Ins/Components/
 
-   (You can also use "Delta.app" on its own — no DAW needed, use its
+   (You can also use "Delta Zero.app" on its own — no DAW needed, use its
    built-in TEST SIGNAL button to try it without routing real audio.)
 
 3. Open Terminal (Applications > Utilities > Terminal) and run:
 
-   xattr -cr ~/Library/Audio/Plug-Ins/VST3/Delta.vst3
-   xattr -cr ~/Library/Audio/Plug-Ins/Components/Delta.component
-   xattr -cr /path/to/Delta.app
+   xattr -cr ~/Library/Audio/Plug-Ins/VST3/"Delta Zero.vst3"
+   xattr -cr ~/Library/Audio/Plug-Ins/Components/"Delta Zero.component"
+   xattr -cr /path/to/"Delta Zero.app"
 
    This removes the "downloaded from the internet" flag that would
    otherwise make Gatekeeper block an unsigned plugin. It does not
    disable your Mac's security — it just tells macOS this specific
    file is one you trust.
 
-4. Rescan plugins in your DAW (or restart it) — Delta should now show
+4. Rescan plugins in your DAW (or restart it) — Delta Zero should now show
    up under your effects.
 
 USING IT
 ---------
 
-Delta needs TWO audio sources to compare: the main input (source A) and
-a sidechain input (source B) — most DAWs let you route a sidechain from
+Delta Zero needs TWO audio sources to compare: the main input (source A)
+and a sidechain input (source B) — most DAWs let you route a sidechain from
 another track onto an insert. Hit ALIGN to auto-correct any timing
 offset between the two, then watch the spectrogram: silence/black means
 the two sources are effectively identical, any colour is a real
@@ -51,7 +51,7 @@ TROUBLESHOOTING
 ----------------
 
 If your DAW still refuses to load it: open System Settings > Privacy &
-Security, scroll down — you should see a message about "Delta" being
+Security, scroll down — you should see a message about "Delta Zero" being
 blocked, with an "Open Anyway" button. Click it once.
 
 QUESTIONS / BUGS

@@ -20,6 +20,13 @@ private:
     DeltaProcessor& processorRef;
     DeltaLookAndFeel lookAndFeel;
 
+    // Family-standard header/brand chrome (same structure as Montagem/Yano:
+    // title + subtitle at top, "@handle" bottom-right) -- everything else
+    // below (spectrogram, buttons, legend, HUD) is Delta-specific and unchanged.
+    juce::Label titleLabel;
+    juce::Label subtitleLabel;
+    juce::Label brandLabel;
+
     juce::TextButton alignButton { "ALIGN" };
     juce::TextButton testSignalButton { "TEST SIG" };
     juce::TextButton loadAButton { "LOAD A" };

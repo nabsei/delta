@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Delta are documented here. Format follows
+All notable changes to Delta Zero (formerly Delta) are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versioning
 follows [Semantic Versioning](https://semver.org/) adapted for a pre-1.0
 beta:
@@ -8,6 +8,33 @@ beta:
 - **PATCH** (0.2.x): bug fixes only, no behavior/feature changes
 - **MINOR** (0.x.0): new features or notable user-facing changes
 - **MAJOR** (1.0.0+): first stable release, then breaking changes only
+
+## [0.5.0] - 2026-07-20
+
+### Changed
+- Renamed from Delta to **Delta Zero**, to avoid the ambiguity between the
+  product name and the "Delta line" (Delta Zero + Delta Blind) family
+  name -- same fix already applied to Yano Log earlier in the catalogue.
+  `PRODUCT_NAME`, bundle ID, and the on-screen title changed accordingly.
+  No DSP or parameter changes.
+
+## [0.4.0] - 2026-07-18
+
+### Changed
+- Delta now publishes under **Bumpin Audio** instead of nabsei directly,
+  joining the same catalogue as the Montagem and Yano lines. `COMPANY_NAME`
+  and the plugin bundle ID changed accordingly.
+- Full colour-language rework: the amber-phosphor "lab instrument" palette
+  is replaced by the Bumpin Audio catalogue's cyan/magenta identity. The
+  spectrogram/legend heatmap is now a continuous multi-stop gradient (deep
+  blue -> cyan -> violet -> magenta -> white) instead of a single hue,
+  magenta is used as a small deliberate accent (engaged buttons, peak-hold
+  contour, bezel rim-light), and the title now uses the same brand typeface
+  as the Bumpin Audio mark.
+- Added a family-standard header (title/subtitle) and brand label, matching
+  the layout convention used across Montagem/Yano, while keeping Delta's
+  own instrument-panel layout (spectrogram, buttons, legend, HUD) unchanged.
+- No DSP or parameter changes -- this is a visual/branding release only.
 
 ## [0.3.1] - 2026-07-16
 

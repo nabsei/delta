@@ -50,7 +50,7 @@ jobs:
 
       - name: Collect Standalone
         run: |
-          find build -name "Delta.app" -exec cp -R {} dist/macos/ \;
+          find build -name "Delta Zero.app" -exec cp -R {} dist/macos/ \;
 
       - name: Add docs
         run: |
@@ -61,13 +61,13 @@ jobs:
       - name: Create macOS zip
         run: |
           cd dist/macos
-          zip -r ../../Delta_Beta_Mac.zip .
+          zip -r ../../DeltaZero_Beta_Mac.zip .
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
-          path: Delta_Beta_Mac.zip
+          path: DeltaZero_Beta_Mac.zip
 
   # ─────────────────────────────────────────
   # Windows — VST3 + Standalone
@@ -113,7 +113,7 @@ jobs:
       - name: Collect Standalone
         shell: pwsh
         run: |
-          Get-ChildItem -Recurse -Filter "Delta.exe" build | `
+          Get-ChildItem -Recurse -Filter "Delta Zero.exe" build | `
             ForEach-Object { Copy-Item $_.FullName dist\windows\ -Force }
 
       - name: Add docs
@@ -127,13 +127,13 @@ jobs:
         shell: pwsh
         run: |
           Compress-Archive -Path dist\windows\* `
-            -DestinationPath "Delta_Beta_Windows.zip"
+            -DestinationPath "DeltaZero_Beta_Windows.zip"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: Delta_Beta_Windows.zip
+          path: DeltaZero_Beta_Windows.zip
 
   # ─────────────────────────────────────────
   # Create the GitHub Release
@@ -158,7 +158,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Delta ${{ github.ref_name }} — Beta (macOS + Windows)"
+          name: "Delta Zero ${{ github.ref_name }} — Beta (macOS + Windows)"
           draft: false
           prerelease: false
           body: |
@@ -173,5 +173,5 @@ jobs:
 
             See CHANGELOG.md for the full version history. Bug reports and feedback welcome via GitHub Issues.
           files: |
-            Delta_Beta_Mac.zip
-            Delta_Beta_Windows.zip
+            DeltaZero_Beta_Mac.zip
+            DeltaZero_Beta_Windows.zip

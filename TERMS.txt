@@ -1,7 +1,7 @@
-DELTA — TERMS OF USE (Beta)
+DELTA ZERO — TERMS OF USE (Beta)
 =====================================
 
-Copyright (c) 2026 nabsei. All rights reserved.
+Copyright (c) 2026 Bumpin Audio. All rights reserved.
 
 This software is provided free of charge for personal and commercial
 audio production/verification use during the public beta period. A paid
@@ -24,7 +24,7 @@ this beta period. Functionality and these terms may change for the
 final paid v1.0 release.
 
 Official download location:
-- https://github.com/nabsei/delta
+- https://github.com/nabsei/delta-zero
 
 If you obtained this software from any other source, please verify
 authenticity via the link above.

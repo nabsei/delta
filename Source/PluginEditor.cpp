@@ -42,25 +42,30 @@ namespace
         return "NO MATCH";
     }
 
-    // Single-hue "thermal" heatmap: silence reads as black, energy climbs
-    // through amber, and only the hottest peaks reach white.
+    // Continuous multi-stop heatmap: silence reads as navy-black, energy
+    // climbs through deep blue -> cyan -> violet -> magenta, and only the
+    // hottest peaks reach white. Each intensity band gets its own hue, but
+    // the transitions are smooth (no hard edges between colours) and
+    // luminosity still rises monotonically with t, so it reads calmer than
+    // two competing flat-colour blocks while carrying more information than
+    // a single hue.
     float magnitudeToIntensity(float db)
     {
         return juce::jlimit(0.0f, 1.0f, (db + 90.0f) / 80.0f); // -90..-10 -> 0..1
     }
 
-    // Three-stop thermal ramp instead of a flat amber->white blend: adds a
-    // warmer, slightly red-shifted stage between amber and white so the
-    // hottest peaks read as "white-hot with a red halo" rather than just
-    // fading to a pale colour -- closer to how a real thermal palette looks.
     juce::Colour colourForIntensity(float t)
     {
-        static const juce::Colour hot { 0xffff6a20 };
-        if (t < 0.55f)
-            return DeltaLookAndFeel::bg.interpolatedWith(DeltaLookAndFeel::amber, t / 0.55f);
-        if (t < 0.85f)
-            return DeltaLookAndFeel::amber.interpolatedWith(hot, (t - 0.55f) / 0.3f);
-        return hot.interpolatedWith(juce::Colours::white, (t - 0.85f) / 0.15f);
+        using LF = DeltaLookAndFeel;
+        if (t < 0.25f)
+            return LF::bg.interpolatedWith(LF::deepBlue, t / 0.25f);
+        if (t < 0.5f)
+            return LF::deepBlue.interpolatedWith(LF::cyan, (t - 0.25f) / 0.25f);
+        if (t < 0.75f)
+            return LF::cyan.interpolatedWith(LF::violet, (t - 0.5f) / 0.25f);
+        if (t < 0.92f)
+            return LF::violet.interpolatedWith(LF::magenta, (t - 0.75f) / 0.17f);
+        return LF::magenta.interpolatedWith(juce::Colours::white, (t - 0.92f) / 0.08f);
     }
 
     constexpr double introDurationMs = 550.0;
@@ -70,6 +75,28 @@ DeltaEditor::DeltaEditor(DeltaProcessor& p)
     : juce::AudioProcessorEditor(&p), processorRef(p)
 {
     setLookAndFeel(&lookAndFeel);
+
+    // Family-standard header/brand chrome -- same structure, sizes and
+    // typeface Montagem/Yano use for their title/subtitle/brand labels.
+    // Delta's own accent colour and monospace instrument type are kept for
+    // everything below (spectrogram, readouts, buttons).
+    titleLabel.setText("DELTA ZERO", juce::dontSendNotification);
+    titleLabel.setJustificationType(juce::Justification::centred);
+    titleLabel.setColour(juce::Label::textColourId, DeltaLookAndFeel::cyan);
+    titleLabel.setFont(DeltaLookAndFeel::brandTitleFont(27.0f).withExtraKerningFactor(0.05f));
+    addAndMakeVisible(titleLabel);
+
+    subtitleLabel.setText("NULL-TEST / DIFF CHECKER", juce::dontSendNotification);
+    subtitleLabel.setJustificationType(juce::Justification::centred);
+    subtitleLabel.setColour(juce::Label::textColourId, DeltaLookAndFeel::textDim);
+    subtitleLabel.setFont(DeltaLookAndFeel::familyFont(12.0f, false).withExtraKerningFactor(0.08f));
+    addAndMakeVisible(subtitleLabel);
+
+    brandLabel.setText(juce::String::fromUTF8("Bumpin Audio \xe2\x80\x94 UNLICENSED"), juce::dontSendNotification);
+    brandLabel.setJustificationType(juce::Justification::centredRight);
+    brandLabel.setColour(juce::Label::textColourId, DeltaLookAndFeel::textDim.withAlpha(0.5f));
+    brandLabel.setFont(DeltaLookAndFeel::familyFont(10.0f, false));
+    addAndMakeVisible(brandLabel);
 
     testSignalButton.setClickingTogglesState(true);
     testSignalButton.setToggleState(processorRef.isTestSignalEnabled(), juce::dontSendNotification);
@@ -193,14 +220,16 @@ void DeltaEditor::pushSpectrumColumns()
         for (int y = 0; y < imgH; ++y)
         {
             juce::Colour core = colourForIntensity(tVals[(size_t) y]);
-            // The glow strength, decay curve and colour grading used in the
-            // shipped/tested build are tuned against reference material and
-            // are not reproduced in this public version.
-            float glowAmount = blurredT[(size_t) y] * 0.3f;
+            // Glow tint follows the local gradient hue (via the blurred
+            // neighbourhood's own colour) rather than a fixed colour, so the
+            // bleed around a magenta peak reads magenta, around a cyan
+            // region reads cyan -- coherent with the multi-stop ramp.
+            juce::Colour glowTint = colourForIntensity(blurredT[(size_t) y]);
+            float glowAmount = blurredT[(size_t) y] * 0.6f;
 
-            float r = juce::jlimit(0.0f, 1.0f, core.getFloatRed() + DeltaLookAndFeel::amber.getFloatRed() * glowAmount);
-            float g2 = juce::jlimit(0.0f, 1.0f, core.getFloatGreen() + DeltaLookAndFeel::amber.getFloatGreen() * glowAmount);
-            float b = juce::jlimit(0.0f, 1.0f, core.getFloatBlue() + DeltaLookAndFeel::amber.getFloatBlue() * glowAmount);
+            float r = juce::jlimit(0.0f, 1.0f, core.getFloatRed() + glowTint.getFloatRed() * glowAmount);
+            float g2 = juce::jlimit(0.0f, 1.0f, core.getFloatGreen() + glowTint.getFloatGreen() * glowAmount);
+            float b = juce::jlimit(0.0f, 1.0f, core.getFloatBlue() + glowTint.getFloatBlue() * glowAmount);
 
             bitmap.setPixelColour(spectrogramWriteX, y, juce::Colour::fromFloatRGBA(r, g2, b, 1.0f));
         }
@@ -248,7 +277,14 @@ void DeltaEditor::timerCallback()
 
 void DeltaEditor::paint(juce::Graphics& g)
 {
-    g.fillAll(DeltaLookAndFeel::bg);
+    // Same subtle radial gradient treatment as Montagem/Yano's background,
+    // applied to Delta's own black -- barely visible against pure black,
+    // but keeps the panel construction consistent across the catalogue.
+    auto bounds = getLocalBounds().toFloat();
+    juce::ColourGradient bgGradient(DeltaLookAndFeel::bg.brighter(0.04f), bounds.getCentre(),
+                                     DeltaLookAndFeel::bg.darker(0.2f), bounds.getBottomLeft(), true);
+    g.setGradientFill(bgGradient);
+    g.fillAll();
 
     double sampleRate = processorRef.getSampleRate();
     if (sampleRate <= 0.0) sampleRate = 44100.0;
@@ -298,7 +334,7 @@ void DeltaEditor::paint(juce::Graphics& g)
         int y = spectrogramBounds.getY() + (int) rowFromFreq(f, imgH, sampleRate);
         g.setColour(DeltaLookAndFeel::grid);
         g.drawHorizontalLine(y, (float) spectrogramBounds.getX(), (float) spectrogramBounds.getRight());
-        g.setColour(DeltaLookAndFeel::amberDim);
+        g.setColour(DeltaLookAndFeel::cyanDim);
         g.drawText(freqLabel(f), spectrogramBounds.getX() + 4, y - 12, 40, 12,
                    juce::Justification::centredLeft);
     }
@@ -340,14 +376,15 @@ void DeltaEditor::paint(juce::Graphics& g)
             }
             // Halo pass beneath the crisp line, matching the spectrogram's
             // phosphor glow so the peak-hold contour doesn't look flat next
-            // to it.
-            g.setColour(DeltaLookAndFeel::amber.withAlpha(0.22f));
+            // to it. Magenta (the ramp's hot end), not cyan -- this line
+            // specifically traces peaks, so it should read as "hot".
+            g.setColour(DeltaLookAndFeel::magenta.withAlpha(0.22f));
             g.strokePath(peakPath, juce::PathStrokeType(3.5f));
-            g.setColour(DeltaLookAndFeel::amber.withAlpha(0.75f));
+            g.setColour(DeltaLookAndFeel::magenta.withAlpha(0.75f));
             g.strokePath(peakPath, juce::PathStrokeType(1.0f));
         }
 
-        g.setColour(DeltaLookAndFeel::amberDim.withAlpha(0.6f));
+        g.setColour(DeltaLookAndFeel::cyanDim.withAlpha(0.6f));
         g.drawRect(ps, 1);
     }
 
@@ -360,7 +397,7 @@ void DeltaEditor::paint(juce::Graphics& g)
             g.setColour(colourForIntensity(t));
             g.drawHorizontalLine(lg.getY() + y, (float) lg.getX(), (float) lg.getRight());
         }
-        g.setColour(DeltaLookAndFeel::amberDim);
+        g.setColour(DeltaLookAndFeel::cyanDim);
         g.drawRect(lg, 1);
 
         g.setFont(DeltaLookAndFeel::monoFont(9.0f));
@@ -376,67 +413,75 @@ void DeltaEditor::paint(juce::Graphics& g)
     }
 
     // Bezel: a single frame around the whole instrument display (spectrogram
-    // + peak strip + legend), with small corner ticks instead of a plain
-    // rectangle -- reads as a lit panel set into a housing rather than data
-    // just floating on the background.
+    // + peak strip + legend). Same corner-rounding convention as the rest of
+    // the catalogue -- reads as a lit panel set into a housing rather than
+    // data just floating on the background.
     {
         auto db = displayBounds.toFloat();
-        g.setColour(DeltaLookAndFeel::amberDim.withAlpha(0.7f));
-        g.drawRect(db, 1.0f);
 
-        constexpr float tick = 7.0f;
-        g.setColour(DeltaLookAndFeel::amber.withAlpha(0.8f));
-        auto corner = [&] (float x, float y, float dx, float dy)
+        // Faked soft outer glow: a few concentric strokes, decreasing alpha
+        // and increasing radius, instead of a real-time Gaussian blur (too
+        // costly to redo every frame at 30Hz) -- same effect as the logo's
+        // outer glow, cheap enough for continuous repaint.
+        for (int i = 3; i >= 1; --i)
         {
-            g.drawLine(x, y, x + dx * tick, y, 1.4f);
-            g.drawLine(x, y, x, y + dy * tick, 1.4f);
-        };
-        corner(db.getX(), db.getY(), 1.0f, 1.0f);
-        corner(db.getRight(), db.getY(), -1.0f, 1.0f);
-        corner(db.getX(), db.getBottom(), 1.0f, -1.0f);
-        corner(db.getRight(), db.getBottom(), -1.0f, -1.0f);
+            auto grown = db.expanded((float) i * 1.6f);
+            g.setColour(DeltaLookAndFeel::cyan.withAlpha(0.05f / (float) i));
+            g.drawRoundedRectangle(grown, DeltaLookAndFeel::familyCornerSize + (float) i, 1.5f);
+        }
+
+        g.setColour(DeltaLookAndFeel::cyanDim.withAlpha(0.7f));
+        g.drawRoundedRectangle(db, DeltaLookAndFeel::familyCornerSize, 1.0f);
+
+        // Rim-light: a soft magenta highlight along the top edge only, like
+        // light catching the top of a glass panel -- a small, deliberate
+        // touch of the pop accent on the instrument's main frame.
+        juce::Path rim;
+        rim.addRoundedRectangle(db, DeltaLookAndFeel::familyCornerSize);
+        juce::ColourGradient rimGrad(DeltaLookAndFeel::magenta.withAlpha(0.35f), db.getCentreX(), db.getY(),
+                                      DeltaLookAndFeel::magenta.withAlpha(0.0f), db.getCentreX(), db.getY() + db.getHeight() * 0.15f, false);
+        g.saveState();
+        g.reduceClipRegion(db.getX(), db.getY(), db.getWidth(), db.getHeight() * 0.15f);
+        g.setGradientFill(rimGrad);
+        g.strokePath(rim, juce::PathStrokeType(1.5f));
+        g.restoreState();
     }
-
-    // Top HUD, overlaid directly on the spectrogram -- no card, no title bar.
-    auto topHud = spectrogramBounds.withHeight(18).reduced(6, 2);
-
-    // Delta (Delta) mark: the plugin's literal namesake as a compact
-    // triangle logotype, instead of relying on plain text alone.
-    auto markArea = topHud.removeFromLeft(14).toFloat().reduced(0.0f, 1.5f);
-    juce::Path deltaMark;
-    deltaMark.addTriangle(markArea.getCentreX(), markArea.getY(),
-                          markArea.getX(), markArea.getBottom(),
-                          markArea.getRight(), markArea.getBottom());
-    g.setColour(DeltaLookAndFeel::amber.withAlpha(0.15f));
-    g.fillPath(deltaMark);
-    g.setColour(DeltaLookAndFeel::amber);
-    g.strokePath(deltaMark, juce::PathStrokeType(1.3f));
-    topHud.removeFromLeft(4);
-
-    g.setColour(DeltaLookAndFeel::textDim);
-    g.setFont(DeltaLookAndFeel::monoFont(12.0f, true).withExtraKerningFactor(0.06f));
-    g.drawText("DELTA / NULL TEST", topHud, juce::Justification::centredLeft);
 
     // Null-depth readout: the single number this whole instrument exists to
     // produce, so it gets its own inset digital-readout box rather than
     // sharing a thin text row at the same weight as the branding.
-    auto readoutColour = currentSidechainPresent ? DeltaLookAndFeel::amber : DeltaLookAndFeel::textDim;
+    auto readoutColour = currentSidechainPresent ? DeltaLookAndFeel::cyan : DeltaLookAndFeel::textDim;
     {
         const int rw = 150, rh = 36;
         juce::Rectangle<int> readoutBox(spectrogramBounds.getRight() - 6 - rw,
                                          spectrogramBounds.getY() + 4, rw, rh);
 
-        g.setColour(DeltaLookAndFeel::bg.withAlpha(0.6f));
-        g.fillRect(readoutBox);
+        auto rb = readoutBox.toFloat();
+        juce::ColourGradient boxFill(DeltaLookAndFeel::bg.brighter(0.15f).withAlpha(0.75f), rb.getCentreX(), rb.getY(),
+                                      DeltaLookAndFeel::bg.withAlpha(0.6f), rb.getCentreX(), rb.getBottom(), false);
+        g.setGradientFill(boxFill);
+        g.fillRoundedRectangle(rb, DeltaLookAndFeel::familyCornerSize * 0.5f);
         g.setColour(readoutColour.withAlpha(0.6f));
-        g.drawRect(readoutBox, 1.0f);
+        g.drawRoundedRectangle(rb, DeltaLookAndFeel::familyCornerSize * 0.5f, 1.0f);
 
         auto inner = readoutBox.reduced(7, 3);
         auto valueArea = inner.removeFromTop(23);
-        g.setColour(readoutColour);
+        juce::String valueText = currentSidechainPresent ? formatDb(displayDb) : juce::String("-inf dB");
         g.setFont(DeltaLookAndFeel::monoFont(19.0f, true));
-        g.drawText(currentSidechainPresent ? formatDb(displayDb) : juce::String("-inf dB"),
-                   valueArea, juce::Justification::centredRight);
+
+        // Cheap fake glow behind the one number this whole instrument exists
+        // to produce: the same text redrawn a couple of times, offset and
+        // faded, under the crisp readout -- same idea as the logo's text
+        // bloom, without a real-time blur pass.
+        if (currentSidechainPresent)
+        {
+            g.setColour(readoutColour.withAlpha(0.25f));
+            g.drawText(valueText, valueArea.translated(0, 1), juce::Justification::centredRight);
+            g.drawText(valueText, valueArea.expanded(1, 0), juce::Justification::centredRight);
+        }
+
+        g.setColour(readoutColour);
+        g.drawText(valueText, valueArea, juce::Justification::centredRight);
 
         g.setColour(DeltaLookAndFeel::textDim);
         g.setFont(DeltaLookAndFeel::monoFont(9.5f).withExtraKerningFactor(0.04f));
@@ -444,11 +489,11 @@ void DeltaEditor::paint(juce::Graphics& g)
     }
 
     // Bottom bar.
-    g.setColour(DeltaLookAndFeel::amberDim);
+    g.setColour(DeltaLookAndFeel::cyanDim);
     g.drawHorizontalLine(bottomBar.getY(), 0.0f, (float) getWidth());
 
     g.setFont(DeltaLookAndFeel::monoFont(11.0f));
-    g.setColour(currentFileModeEnabled ? DeltaLookAndFeel::amber : DeltaLookAndFeel::textDim);
+    g.setColour(currentFileModeEnabled ? DeltaLookAndFeel::cyan : DeltaLookAndFeel::textDim);
     juce::String fileStatus = currentFileModeEnabled
                                    ? ("FILES  A: " + currentFileNameA + "   B: " + currentFileNameB)
                                    : juce::String("LIVE SIDECHAIN MODE (load files to compare offline)");
@@ -459,12 +504,6 @@ void DeltaEditor::paint(juce::Graphics& g)
     juce::String offsetText = "OFFSET " + juce::String(currentOffsetSamples) + " smp ("
                                    + juce::String(ms, 2) + " ms)";
     g.drawText(offsetText, offsetTextArea, juce::Justification::centredLeft);
-
-    // Free during the beta test period -- licensing/paid gating comes later,
-    // so the footer signals status rather than just a casual name credit.
-    g.setColour(DeltaLookAndFeel::amberDim);
-    g.setFont(DeltaLookAndFeel::monoFont(11.0f).withExtraKerningFactor(0.06f));
-    g.drawText("UNLICENSED", brandTextArea, juce::Justification::centredRight);
 
     // Faint fixed grain, tiled across the whole instrument display -- gives
     // the panel a bit of screen texture instead of perfectly flat vector fills.
@@ -485,11 +524,11 @@ void DeltaEditor::paint(juce::Graphics& g)
         float fade = 1.0f - progress;
         int sweepY = spectrogramBounds.getY() + (int) (progress * (float) spectrogramBounds.getHeight());
 
-        g.setColour(DeltaLookAndFeel::amber.withAlpha(0.12f * fade));
+        g.setColour(DeltaLookAndFeel::cyan.withAlpha(0.12f * fade));
         g.fillRect(spectrogramBounds.getX(), spectrogramBounds.getY(),
                    spectrogramBounds.getWidth(), sweepY - spectrogramBounds.getY());
 
-        g.setColour(DeltaLookAndFeel::amber.withAlpha(0.55f * fade));
+        g.setColour(DeltaLookAndFeel::cyan.withAlpha(0.55f * fade));
         g.fillRect(spectrogramBounds.getX(), sweepY - 1, spectrogramBounds.getWidth(), 2);
     }
 }
@@ -497,6 +536,13 @@ void DeltaEditor::paint(juce::Graphics& g)
 void DeltaEditor::resized()
 {
     auto full = getLocalBounds();
+
+    // Family-standard header block -- same 36/20/8px allocation as
+    // Montagem/Yano's title/subtitle/gap.
+    auto header = full.removeFromTop(64).reduced(16, 0);
+    titleLabel.setBounds(header.removeFromTop(36));
+    subtitleLabel.setBounds(header.removeFromTop(20));
+
     bottomBar = full.removeFromBottom(64);
     displayBounds = full.reduced(2);
     full.reduce(6, 6);
@@ -534,7 +580,8 @@ void DeltaEditor::resized()
     alignButton.setBounds(buttonRow.removeFromLeft(70));
 
     auto textRow = bottomBar.reduced(8, 2);
-    brandTextArea = textRow.removeFromRight(90);
+    brandTextArea = textRow.removeFromRight(150);
+    brandLabel.setBounds(brandTextArea);
     offsetTextArea = textRow.removeFromRight(170);
     fileStatusTextArea = textRow;
 }
